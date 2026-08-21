@@ -1,0 +1,28 @@
+# outputs
+outputs/
+*.mp4
+!assets/*.mp4
+
+# models
+*.pt
+*.onnx
+*.engine
+weights/
+
+# python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.env
+.pytest_cache/
+.mypy_cache/
+
+# system
+.DS_Store
+Thumbs.db
+
+# experiment
+.scratch/
+scratch/

@@ -1,0 +1,8 @@
+opencv-python==5.0.0.93
+ultralytics==8.4.121
+torch==2.13.0
+torchvision==0.28.0
+PyYAML==6.0.3
+numpy==2.4.6
+# lap is auto-installed by ultralytics for bytetrack
+lap>=0.5.12

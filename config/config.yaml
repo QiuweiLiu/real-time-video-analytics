@@ -1,0 +1,14 @@
+# Real-Time Video Analytics — M1 Config
+model: yolov8n.pt
+source: assets/sample.mp4
+output: outputs/result.mp4
+
+device: auto  # auto | cpu | mps | cuda | 0
+conf: 0.25
+iou: 0.5
+imgsz: 640
+tracker: bytetrack.yaml  # ultralytics built-in
+classes: null  # null = all, e.g. [0] for person only
+
+# writer
+fourcc: mp4v  # mp4v, avc1

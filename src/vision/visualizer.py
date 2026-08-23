@@ -60,7 +60,6 @@ def draw_line_and_counts(frame: np.ndarray, p1, p2, counts: dict, mode: str = "b
     cv2.line(frame, (x1, y1), (x2, y2), line_color, 2, cv2.LINE_AA)
     # arrow mid
     mx, my = (x1 + x2)//2, (y1 + y2)//2
-    # perpendicular arrow to indicate direction? simple arrow along line
     cv2.circle(frame, (mx, my), 4, line_color, -1)
     cv2.circle(frame, (mx, my), 4, (0,0,0), 1)
 
@@ -80,6 +79,47 @@ def draw_line_and_counts(frame: np.ndarray, p1, p2, counts: dict, mode: str = "b
     cv2.rectangle(frame, (5, 5), (5+tw+pad*2, 5+th+pad*2), (0,0,0), -1)
     cv2.rectangle(frame, (5, 5), (5+tw+pad*2, 5+th+pad*2), line_color, 1)
     cv2.putText(frame, text, (5+pad, 5+th+pad), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,255), 2, cv2.LINE_AA)
-    # also small legend
     cv2.putText(frame, f"Line {p1}->{p2} mode={mode}", (5, 5+th+pad*2+15), cv2.FONT_HERSHEY_SIMPLEX, 0.4, line_color, 1, cv2.LINE_AA)
+    return frame
+
+
+def draw_roi(frame: np.ndarray, polygon, occupancy: int, max_occ: int, dwell_total: int, dwell_sec: float) -> np.ndarray:
+    """Draw ROI polygon semi-transparent and occupancy/dwell overlay."""
+    if not polygon or len(polygon) < 3:
+        return frame
+    pts = np.array([[int(round(p[0])), int(round(p[1]))] for p in polygon], dtype=np.int32)
+    # filled translucent
+    overlay = frame.copy()
+    cv2.fillPoly(overlay, [pts], (0, 255, 0))
+    cv2.addWeighted(overlay, 0.15, frame, 0.85, 0, frame)
+    # border
+    cv2.polylines(frame, [pts], True, (0, 255, 0), 2, cv2.LINE_AA)
+    # corner points
+    for pt in pts:
+        cv2.circle(frame, tuple(pt), 3, (0, 255, 0), -1)
+
+    # occupancy box bottom-left? place below line box
+    text = f"ROI Occ: {occupancy} (max {max_occ})  Dwell>{dwell_sec}s: {dwell_total}"
+    (tw, th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 2)
+    pad = 6
+    # position at bottom left
+    h = frame.shape[0]
+    y0 = h - 5 - th - pad*2
+    x0 = 5
+    cv2.rectangle(frame, (x0, y0), (x0+tw+pad*2, y0+th+pad*2), (0,0,0), -1)
+    cv2.rectangle(frame, (x0, y0), (x0+tw+pad*2, y0+th+pad*2), (0,255,0), 1)
+    cv2.putText(frame, text, (x0+pad, y0+th+pad), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255,255,255), 1, cv2.LINE_AA)
+    return frame
+
+
+def highlight_dwell_tracks(frame: np.ndarray, tracks, roi_analytics) -> np.ndarray:
+    """Red thick border for tracks that have triggered dwell (stay >= threshold)."""
+    if roi_analytics is None:
+        return frame
+    dwell_ids = {e.track_id for e in roi_analytics.get_events()}
+    for t in tracks:
+        if t.track_id in dwell_ids:
+            x1, y1, x2, y2 = map(int, map(round, t.bbox))
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (0,0,255), 3)
+            cv2.putText(frame, "DWELL", (x1, max(15, y1-20)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,255), 2, cv2.LINE_AA)
     return frame

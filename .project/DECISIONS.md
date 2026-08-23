@@ -29,3 +29,15 @@
 - Decision: 生成 assets/line_demo.mp4 水平滑移 bus (-250->+250, 80f) 确保 4次越线, 比下载更可复现
 - Reason: 保证确定性、离线可验证、与 M1 共享 bus 检测分布
 - Evidence: scripts/generate_line_demo.py, outputs/line_result.mp4 1.99MB
+
+## 2026-08-23 — M3 阈值与可视化
+- Context: 需同时支持静态停留 (sample) 与滑移停留 (roi_demo) 的 dwell 检测, 避免边缘抖动误触发
+- Decision: dwell 1.5s=30f@20fps (进入即计时, 仅首次触发, 离开重置), ROI中心点判定+绿色半透明, dwell红框告警, occupancy每帧统计
+- Reason: 30f 在 80f 视频内保证 sample 4全员@30f 与 roi_demo 分时@30-42 两类场景均触发, 可视化区分 occupancy/dwell
+- Evidence: roi.py:40-90, pipeline 7.4fps, sample occ4 dwell4, roi_demo dwell4
+
+## 2026-08-23 — 归一化统一
+- Context: 需适配不同分辨率视频, 硬编码像素不通用
+- Decision: line/roi 均支持 0-1 归一化, 检测到全点 0-1 时按 frame W/H 转换, 绝对坐标保持原值
+- Reason: 中央 ROI [[0.25,0.25]..] 在 640x480 正确映射 160-480, 便于 Portfolio 演示跨分辨率
+- Evidence: config.py _parse, line_crossing/ROIAnalytics set_frame_size, test_normalized

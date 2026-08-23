@@ -6,9 +6,10 @@ import cv2
 
 from .source.video_source import VideoSource
 from .vision.detector import YOLOTracker
-from .vision.visualizer import draw_tracks, draw_line_and_counts
+from .vision.visualizer import draw_tracks, draw_line_and_counts, draw_roi, highlight_dwell_tracks
 from .utils.config import PipelineConfig
 from .analytics.line_crossing import LineCrossingCounter
+from .analytics.roi import ROIAnalytics
 
 
 class VideoPipeline:
@@ -20,12 +21,10 @@ class VideoPipeline:
         out = Path(self.config.output)
         out.parent.mkdir(parents=True, exist_ok=True)
 
-        # P1-01: guard against overwriting the source file
         try:
             if Path(src).resolve() == out.resolve():
                 raise ValueError(f"source and output must be different files: {src}")
         except FileNotFoundError:
-            # output may not exist yet — compare absolute paths
             if Path(src).absolute() == out.absolute():
                 raise ValueError(f"source and output must be different files: {src}")
 
@@ -35,11 +34,15 @@ class VideoPipeline:
         if self.config.line_crossing.enabled:
             lc = self.config.line_crossing
             print(f"[line] enabled p1={lc.p1} p2={lc.p2} mode={lc.mode} classes={lc.classes}")
+        if self.config.roi.enabled:
+            rc = self.config.roi
+            print(f"[roi] enabled polygon={rc.polygon} dwell={rc.dwell_sec}s classes={rc.classes}")
 
         source = None
         tracker = None
         writer = None
         counter = None
+        roi_analytics = None
         total_frames = 0
         total_tracks = 0
         max_tracks_in_frame = 0
@@ -61,7 +64,6 @@ class VideoPipeline:
             )
             print(f"[vision] {tracker}")
 
-            # init line crossing counter after source size known (for normalized handling)
             if self.config.line_crossing.enabled:
                 lc = self.config.line_crossing
                 counter = LineCrossingCounter(
@@ -70,15 +72,24 @@ class VideoPipeline:
                 )
                 print(f"[line] counter {counter}")
 
-            # writer setup — use source fps/size, fourcc from config
+            if self.config.roi.enabled:
+                rc = self.config.roi
+                roi_analytics = ROIAnalytics(
+                    polygon=list(rc.polygon),
+                    dwell_sec=rc.dwell_sec,
+                    fps=source.fps,
+                    classes=rc.classes,
+                    frame_width=source.width,
+                    frame_height=source.height,
+                )
+                print(f"[roi] analytics {roi_analytics}")
+
             fourcc_str = self.config.fourcc
-            # ensure 4 chars
             if len(fourcc_str) != 4:
                 fourcc_str = "mp4v"
             fourcc = cv2.VideoWriter_fourcc(*fourcc_str)
             writer = cv2.VideoWriter(str(out), fourcc, source.fps, (source.width, source.height))
             if not writer.isOpened():
-                # fallback to mp4v
                 fourcc = cv2.VideoWriter_fourcc(*"mp4v")
                 writer = cv2.VideoWriter(str(out), fourcc, source.fps, (source.width, source.height))
                 if not writer.isOpened():
@@ -92,22 +103,37 @@ class VideoPipeline:
                 for tr in tracks:
                     unique_ids.add(tr.track_id)
 
-                # analytics: line crossing
                 if counter is not None:
                     events = counter.update(tracks, total_frames)
                     for ev in events:
                         print(f"[cross] frame={ev.frame_idx} id={ev.track_id} {ev.class_name} dir={ev.direction} center={ev.center}")
 
+                roi_info = None
+                if roi_analytics is not None:
+                    roi_info = roi_analytics.update(tracks, total_frames)
+                    for ev in roi_info["dwell_events"]:
+                        print(f"[dwell] frame={ev.frame_idx} id={ev.track_id} {ev.class_name} enter={ev.enter_frame} dur={ev.duration_sec}s center={ev.center}")
+
                 vis = draw_tracks(frame, tracks)
                 if counter is not None:
                     vis = draw_line_and_counts(vis, counter.p1, counter.p2, counter.get_counts(), counter.mode)
+                if roi_analytics is not None:
+                    # occupancy from last roi_info or fresh if no tracks? need occupancy even if no tracks? roi_info already computed
+                    occ = roi_info["occupancy"] if roi_info else 0
+                    max_occ = roi_analytics._max_occupancy
+                    dwell_total = roi_info["total_dwell"] if roi_info else len(roi_analytics.get_events())
+                    vis = draw_roi(vis, roi_analytics.get_polygon(), occ, max_occ, dwell_total, roi_analytics.dwell_sec)
+                    vis = highlight_dwell_tracks(vis, tracks, roi_analytics)
                 writer.write(vis)
 
                 if total_frames % 30 == 0 or total_frames == 1:
-                    lc_str = ""
+                    parts = []
                     if counter is not None:
-                        lc_str = f" | line_total={counter.get_counts()['total']}"
-                    print(f"[frame {total_frames}] tracks={len(tracks)} ids={[t.track_id for t in tracks]}{lc_str}")
+                        parts.append(f"line_total={counter.get_counts()['total']}")
+                    if roi_analytics is not None and roi_info is not None:
+                        parts.append(f"roi_occ={roi_info['occupancy']} dwell={roi_info['total_dwell']}")
+                    suffix = " | ".join(parts) if parts else ""
+                    print(f"[frame {total_frames}] tracks={len(tracks)} ids={[t.track_id for t in tracks]}" + (f" | {suffix}" if suffix else ""))
         finally:
             if writer is not None:
                 writer.release()
@@ -121,6 +147,18 @@ class VideoPipeline:
 
         line_stats = counter.get_counts() if counter is not None else {"total": 0, "a_to_b": 0, "b_to_a": 0, "by_class": {}}
         line_events = [e.__dict__ for e in counter.get_events()] if counter is not None else []
+
+        if roi_analytics is not None:
+            roi_events = [e.__dict__ for e in roi_analytics.get_events()]
+            roi_stats = {
+                "occupancy_current": roi_info["occupancy"] if 'roi_info' in locals() and roi_info else 0,
+                "max_occupancy": roi_analytics._max_occupancy,
+                "total_dwell": len(roi_analytics.get_events()),
+                "by_class": roi_info["by_class"] if 'roi_info' in locals() and roi_info else {},
+                "events": roi_events,
+            }
+        else:
+            roi_stats = {"occupancy_current": 0, "max_occupancy": 0, "total_dwell": 0, "by_class": {}, "events": []}
 
         stats = {
             "total_frames": total_frames,
@@ -136,6 +174,8 @@ class VideoPipeline:
             "line_crossing": line_stats,
             "line_events": line_events,
             "line_enabled": counter is not None,
+            "roi": roi_stats,
+            "roi_enabled": roi_analytics is not None,
         }
         print(f"[done] {stats}")
         return stats

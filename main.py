@@ -14,13 +14,14 @@ from src.pipeline import VideoPipeline
 
 
 def parse_args():
-    p = argparse.ArgumentParser(description="Real-Time Video Analytics — M1/M2")
+    p = argparse.ArgumentParser(description="Real-Time Video Analytics — M1/M2/M3")
     p.add_argument("--config", type=str, default="config/config.yaml", help="path to config yaml")
     p.add_argument("--source", type=str, default=None, help="override video source path")
     p.add_argument("--output", type=str, default=None, help="override output path")
     p.add_argument("--device", type=str, default=None, help="override device (auto/cpu/mps/cuda/0)")
     p.add_argument("--conf", type=float, default=None, help="override confidence threshold")
     p.add_argument("--no-line", action="store_true", help="disable line crossing for this run")
+    p.add_argument("--no-roi", action="store_true", help="disable ROI for this run")
     return p.parse_args()
 
 
@@ -40,12 +41,17 @@ def main():
         overrides["conf"] = args.conf
 
     if args.no_line:
-        # disable line crossing override
         from dataclasses import replace
         from src.utils.config import LineCrossingConfig
         lc = LineCrossingConfig(enabled=False, p1=(320,0), p2=(320,480), mode="both", classes=None)
         cfg = replace(cfg, line_crossing=lc)
         print("[override] line_crossing disabled via --no-line")
+    if args.no_roi:
+        from dataclasses import replace
+        from src.utils.config import ROIConfig
+        rc = ROIConfig(enabled=False, polygon=((160,120),(480,120),(480,360),(160,360)), dwell_sec=1.5, classes=None)
+        cfg = replace(cfg, roi=rc)
+        print("[override] ROI disabled via --no-roi")
 
     if overrides:
         # validate overrides before applying (P2-05)
@@ -70,12 +76,16 @@ def main():
     print("\n=== Summary ===")
     for k, v in stats.items():
         print(f"  {k}: {v}")
-    # line crossing summary highlight
     if stats.get("line_enabled"):
         lc = stats.get("line_crossing", {})
         print(f"\n[line] total={lc.get('total')} a_to_b={lc.get('a_to_b')} b_to_a={lc.get('b_to_a')} by_class={lc.get('by_class')}")
         if lc.get("total", 0) == 0:
             print("[line] note: no crossings detected — try line_demo.mp4 or adjust line position")
+    if stats.get("roi_enabled"):
+        rc = stats.get("roi", {})
+        print(f"\n[roi] occ_current={rc.get('occupancy_current')} max={rc.get('max_occupancy')} dwell_total={rc.get('total_dwell')} by_class={rc.get('by_class')}")
+        if rc.get("total_dwell",0)>0:
+            print(f"[roi] dwell events: {rc.get('events')[:2]} ...")
 
     if not Path(stats["output"]).exists() or stats["output_bytes"] == 0:
         print("[error] output video missing or empty!", file=sys.stderr)

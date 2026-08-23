@@ -1,19 +1,18 @@
 # HANDOFF
 
-Goal: M2 Line Crossing 越线统计
+Goal: M3 ROI/Occupancy/Dwell
 Done:
-- Config 扩展 line_crossing (enabled/line/mode/classes, 归一化支持)
-- Analytics LineCrossingCounter (side+segment相交, movement>3px 去抖, cooldown 10, 方向 both/a_to_b/b_to_a, by_class)
-- Visualizer draw_line_and_counts + Pipeline 集成 (frame30日志, stats 含 line_crossing/line_events)
-- Demo: assets/line_demo.mp4 80f 滑移 bus 763KB, 生成 scripts/generate_line_demo.py
-- Tests: 10 line_crossing 单元 + 归回, 13 total passed
-- 验证: line_demo 4次 (18/41/50/59) person3 bus1, sample 0次 (抖动过滤), 归一化 0.5 线一致, --no-line 回归 1.44MB
+- Config roi polygon/dwell/classes 归一化
+- ROIAnalytics point_in_polygon + occupancy max/by_class + dwell 30f触发 + 去抖 (enter_frame连续)
+- Visualizer ROI半透明+occupancy/dwell文本+红框, Pipeline集成 line+roi 并行
+- Demo roi_demo 80f 滑入停留 (前16滑入 中40停留 后24滑出) 704KB
+- Tests 9 roi (内外/边/占用/阈值/重置/过滤/归一化/by_class) + 13 prior =22 passed
+- 验证: sample occ4 dwell4@30, roi_demo occ4 dwell4@30/33/38/42 line5, result 1.89MB, --no-* 回归
 Verified:
-- 端到端 80f 输出一致, 可视化含黄线+计数, MPS 8-10fps, CPU 1.4fps
-- 去抖生效: sample 6→0, line_demo 保持 4
+- 端到端 80f一致, 可视化绿ROI+黄线, MPS 5-7fps, 22 tests
 Rejected: —
 Open: 无
-Active: 待 review/commit
+Active: 待 commit/push
 Next:
-1. review → commit → push
-2. 启动 M3 (ROI/Occupancy/Dwell) 需定义区域配置
+1. commit → push
+2. M4 JSON+截图 (事件持久化)

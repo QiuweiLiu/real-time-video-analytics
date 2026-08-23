@@ -1,4 +1,4 @@
-# Real-Time Video Analytics — M2 Config
+# Real-Time Video Analytics — M3 Config
 model: yolov8n.pt
 source: assets/sample.mp4
 output: outputs/result.mp4
@@ -19,3 +19,10 @@ line_crossing:
   line: [[320, 0], [320, 480]]  # p1 -> p2, 支持 0-1 归一化自动转换; 当前为 640x480 垂直中心线
   mode: both  # both | a_to_b | b_to_a
   classes: null  # null=全部, e.g. [0] 仅人
+
+# M3 ROI / Occupancy / Dwell
+roi:
+  enabled: true
+  polygon: [[0.25, 0.25], [0.75, 0.25], [0.75, 0.75], [0.25, 0.75]]  # 归一化中央矩形 → 160,120-480,360
+  dwell_sec: 1.5  # 停留阈值秒, 超过触发 dwell 事件
+  classes: null  # null=全部

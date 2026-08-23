@@ -31,8 +31,8 @@ config.yaml → VideoSource (source/) → VisionPipeline (vision/: YOLO.track + 
 - `pipeline.py` / `main.py`: 串联 source→vision→writer, 配置驱动
 
 ## Milestones
-- M1: MP4 + YOLO + ByteTrack + Stable ID + 输出带框视频 ✅ 当前
-- M2: Line Crossing 越线统计
+- M1: MP4 + YOLO + ByteTrack + Stable ID + 输出带框视频 ✅ done 2026-08-21
+- M2: Line Crossing 越线统计 🚧 当前
 - M3: ROI / Occupancy / Dwell Time
 - M4: Event JSON + 截图
 - M5: FastAPI + Dashboard + RTSP

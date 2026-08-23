@@ -1,19 +1,19 @@
 # HANDOFF
 
-Goal: M1 MP4+YOLO+ByteTrack+输出视频
+Goal: M2 Line Crossing 越线统计
 Done:
-- 初始化 Project OS; 验证环境与 API (8.4.121, MPS)
-- 实现: config.yaml, utils/config+device, source/VideoSource, vision/Track+detector+visualizer, pipeline, main, requirements, README
-- 生成 assets/sample.mp4 (80f, 640x480, bus合成) + yolov8n.pt 自动下载
-- 验证: outputs/result.mp4 80帧 1.4MB, MPS 18.87fps CPU 11.6fps, pytest 3 passed, device auto/cpu 覆盖
-- 审查后修复: source==output 保护, 空输出/零帧校验, 资源泄漏 try/finally 前移, CLI conf 校验, 测试路径 ASSETS 化
+- Config 扩展 line_crossing (enabled/line/mode/classes, 归一化支持)
+- Analytics LineCrossingCounter (side+segment相交, movement>3px 去抖, cooldown 10, 方向 both/a_to_b/b_to_a, by_class)
+- Visualizer draw_line_and_counts + Pipeline 集成 (frame30日志, stats 含 line_crossing/line_events)
+- Demo: assets/line_demo.mp4 80f 滑移 bus 763KB, 生成 scripts/generate_line_demo.py
+- Tests: 10 line_crossing 单元 + 归回, 13 total passed
+- 验证: line_demo 4次 (18/41/50/59) person3 bus1, sample 0次 (抖动过滤), 归一化 0.5 线一致, --no-line 回归 1.44MB
 Verified:
-- YOLO.track persist ID 稳定 (bus.jpg 5 tracks, 第二帧一致)
-- VideoSource/VideoWriter fps/frame_count/fourcc fallback
-- 输出视频帧数与输入一致, 已抽帧 /tmp/thumb.jpg 验证带框
-Rejected: 独立 ByteTrack 仓库方案 (选用 ultralytics 内置)
+- 端到端 80f 输出一致, 可视化含黄线+计数, MPS 8-10fps, CPU 1.4fps
+- 去抖生效: sample 6→0, line_demo 保持 4
+Rejected: —
 Open: 无
-Active: 待 handoff 交付
+Active: 待 review/commit
 Next:
-1. 用户验证: 播放 outputs/result.mp4, 检查 README 运行说明
-2. 确认后启动 M2: Line Crossing 设计 (需定义线段配置与计数逻辑)
+1. review → commit → push
+2. 启动 M3 (ROI/Occupancy/Dwell) 需定义区域配置

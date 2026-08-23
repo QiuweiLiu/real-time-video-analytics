@@ -1,4 +1,4 @@
-# Real-Time Video Analytics — M1 Config
+# Real-Time Video Analytics — M2 Config
 model: yolov8n.pt
 source: assets/sample.mp4
 output: outputs/result.mp4
@@ -12,3 +12,10 @@ classes: null  # null = all, e.g. [0] for person only
 
 # writer
 fourcc: mp4v  # mp4v, avc1
+
+# M2 line crossing
+line_crossing:
+  enabled: true
+  line: [[320, 0], [320, 480]]  # p1 -> p2, 支持 0-1 归一化自动转换; 当前为 640x480 垂直中心线
+  mode: both  # both | a_to_b | b_to_a
+  classes: null  # null=全部, e.g. [0] 仅人

@@ -1,4 +1,5 @@
-"""analytics — placeholder for M2/M3 (line crossing, ROI, occupancy, dwell).
+"""analytics — M2 line crossing."""
 
-M1: no logic required, keeps module structure per spec.
-"""
+from .line_crossing import LineCrossingCounter, CrossingEvent
+
+__all__ = ["LineCrossingCounter", "CrossingEvent"]

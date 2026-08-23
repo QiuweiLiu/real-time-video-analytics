@@ -1,4 +1,4 @@
-"""VideoPipeline — orchestrates source → vision → writer."""
+"""VideoPipeline — orchestrates source → vision → writer + analytics."""
 
 import time
 from pathlib import Path
@@ -6,8 +6,9 @@ import cv2
 
 from .source.video_source import VideoSource
 from .vision.detector import YOLOTracker
-from .vision.visualizer import draw_tracks
+from .vision.visualizer import draw_tracks, draw_line_and_counts
 from .utils.config import PipelineConfig
+from .analytics.line_crossing import LineCrossingCounter
 
 
 class VideoPipeline:
@@ -31,10 +32,14 @@ class VideoPipeline:
         print(f"[pipeline] model={self.config.model} device={self.config.device} conf={self.config.conf} iou={self.config.iou}")
         print(f"[pipeline] source={src}")
         print(f"[pipeline] output={out.resolve()}")
+        if self.config.line_crossing.enabled:
+            lc = self.config.line_crossing
+            print(f"[line] enabled p1={lc.p1} p2={lc.p2} mode={lc.mode} classes={lc.classes}")
 
         source = None
         tracker = None
         writer = None
+        counter = None
         total_frames = 0
         total_tracks = 0
         max_tracks_in_frame = 0
@@ -55,6 +60,15 @@ class VideoPipeline:
                 classes=self.config.classes,
             )
             print(f"[vision] {tracker}")
+
+            # init line crossing counter after source size known (for normalized handling)
+            if self.config.line_crossing.enabled:
+                lc = self.config.line_crossing
+                counter = LineCrossingCounter(
+                    p1=lc.p1, p2=lc.p2, mode=lc.mode, classes=lc.classes,
+                    frame_width=source.width, frame_height=source.height
+                )
+                print(f"[line] counter {counter}")
 
             # writer setup — use source fps/size, fourcc from config
             fourcc_str = self.config.fourcc
@@ -78,11 +92,22 @@ class VideoPipeline:
                 for tr in tracks:
                     unique_ids.add(tr.track_id)
 
+                # analytics: line crossing
+                if counter is not None:
+                    events = counter.update(tracks, total_frames)
+                    for ev in events:
+                        print(f"[cross] frame={ev.frame_idx} id={ev.track_id} {ev.class_name} dir={ev.direction} center={ev.center}")
+
                 vis = draw_tracks(frame, tracks)
+                if counter is not None:
+                    vis = draw_line_and_counts(vis, counter.p1, counter.p2, counter.get_counts(), counter.mode)
                 writer.write(vis)
 
                 if total_frames % 30 == 0 or total_frames == 1:
-                    print(f"[frame {total_frames}] tracks={len(tracks)} ids={[t.track_id for t in tracks]}")
+                    lc_str = ""
+                    if counter is not None:
+                        lc_str = f" | line_total={counter.get_counts()['total']}"
+                    print(f"[frame {total_frames}] tracks={len(tracks)} ids={[t.track_id for t in tracks]}{lc_str}")
         finally:
             if writer is not None:
                 writer.release()
@@ -93,6 +118,9 @@ class VideoPipeline:
 
         elapsed = time.time() - t0
         fps_proc = total_frames / elapsed if elapsed > 0 else 0
+
+        line_stats = counter.get_counts() if counter is not None else {"total": 0, "a_to_b": 0, "b_to_a": 0, "by_class": {}}
+        line_events = [e.__dict__ for e in counter.get_events()] if counter is not None else []
 
         stats = {
             "total_frames": total_frames,
@@ -105,6 +133,9 @@ class VideoPipeline:
             "output": str(out.resolve()),
             "output_exists": out.exists(),
             "output_bytes": out.stat().st_size if out.exists() else 0,
+            "line_crossing": line_stats,
+            "line_events": line_events,
+            "line_enabled": counter is not None,
         }
         print(f"[done] {stats}")
         return stats

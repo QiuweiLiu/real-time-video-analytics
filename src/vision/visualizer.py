@@ -43,3 +43,43 @@ def draw_tracks(frame: np.ndarray, tracks: List[Track]) -> np.ndarray:
         cx, cy = int(round(t.center[0])), int(round(t.center[1]))
         cv2.circle(out, (cx, cy), 3, color, -1)
     return out
+
+
+def draw_line_and_counts(frame: np.ndarray, p1, p2, counts: dict, mode: str = "both") -> np.ndarray:
+    """Overlay counting line and counter text. Modifies frame in-place for efficiency, returns frame."""
+    # line in BGR: yellow for both, green/red for directional
+    if mode == "a_to_b":
+        line_color = (0, 255, 0)
+    elif mode == "b_to_a":
+        line_color = (255, 0, 255)
+    else:
+        line_color = (0, 255, 255)  # yellow both
+
+    x1, y1 = int(round(p1[0])), int(round(p1[1]))
+    x2, y2 = int(round(p2[0])), int(round(p2[1]))
+    cv2.line(frame, (x1, y1), (x2, y2), line_color, 2, cv2.LINE_AA)
+    # arrow mid
+    mx, my = (x1 + x2)//2, (y1 + y2)//2
+    # perpendicular arrow to indicate direction? simple arrow along line
+    cv2.circle(frame, (mx, my), 4, line_color, -1)
+    cv2.circle(frame, (mx, my), 4, (0,0,0), 1)
+
+    # counts overlay top-left
+    total = counts.get("total", 0)
+    a2b = counts.get("a_to_b", 0)
+    b2a = counts.get("b_to_a", 0)
+    if mode == "both":
+        text = f"Count: {total} (A->B:{a2b} B->A:{b2a})"
+    elif mode == "a_to_b":
+        text = f"Count A->B: {a2b} / {total}"
+    else:
+        text = f"Count B->A: {b2a} / {total}"
+
+    (tw, th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
+    pad = 6
+    cv2.rectangle(frame, (5, 5), (5+tw+pad*2, 5+th+pad*2), (0,0,0), -1)
+    cv2.rectangle(frame, (5, 5), (5+tw+pad*2, 5+th+pad*2), line_color, 1)
+    cv2.putText(frame, text, (5+pad, 5+th+pad), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,255), 2, cv2.LINE_AA)
+    # also small legend
+    cv2.putText(frame, f"Line {p1}->{p2} mode={mode}", (5, 5+th+pad*2+15), cv2.FONT_HERSHEY_SIMPLEX, 0.4, line_color, 1, cv2.LINE_AA)
+    return frame

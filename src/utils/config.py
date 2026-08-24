@@ -32,6 +32,18 @@ class EventsConfig:
 
 
 @dataclass(frozen=True)
+class ServerConfig:
+    host: str
+    port: int
+
+
+@dataclass(frozen=True)
+class RTSPConfig:
+    max_frames: int
+    timeout_sec: float
+
+
+@dataclass(frozen=True)
 class PipelineConfig:
     model: str
     source: str
@@ -46,6 +58,8 @@ class PipelineConfig:
     line_crossing: LineCrossingConfig
     roi: ROIConfig
     events: EventsConfig
+    server: ServerConfig
+    rtsp: RTSPConfig
 
 
 def _parse_line_crossing(raw: dict) -> LineCrossingConfig:
@@ -119,6 +133,20 @@ def _parse_events(raw: dict) -> EventsConfig:
     return EventsConfig(enabled=enabled, json_path=json_path, snapshot_dir=snapshot_dir, snapshot_expand=snapshot_expand, snapshot_max=snapshot_max)
 
 
+def _parse_server(raw: dict) -> ServerConfig:
+    sc = raw.get("server", {}) or {}
+    host = str(sc.get("host", "0.0.0.0"))
+    port = int(sc.get("port", 8000))
+    return ServerConfig(host=host, port=port)
+
+
+def _parse_rtsp(raw: dict) -> RTSPConfig:
+    rc = raw.get("rtsp", {}) or {}
+    max_frames = int(rc.get("max_frames", 300))
+    timeout_sec = float(rc.get("timeout_sec", 5.0))
+    return RTSPConfig(max_frames=max_frames, timeout_sec=timeout_sec)
+
+
 def load_config(path: str | Path) -> PipelineConfig:
     p = Path(path)
     if not p.exists():
@@ -148,6 +176,8 @@ def load_config(path: str | Path) -> PipelineConfig:
     line_crossing = _parse_line_crossing(raw)
     roi = _parse_roi(raw)
     events = _parse_events(raw)
+    server = _parse_server(raw)
+    rtsp = _parse_rtsp(raw)
 
     return PipelineConfig(
         model=str(model),
@@ -163,4 +193,6 @@ def load_config(path: str | Path) -> PipelineConfig:
         line_crossing=line_crossing,
         roi=roi,
         events=events,
+        server=server,
+        rtsp=rtsp,
     )

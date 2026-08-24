@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>Real-Time Video Analytics - Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+*{box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial}
+body{margin:0;background:#0b0f14;color:#e6eef6}
+header{padding:16px 24px;background:#10161f;border-bottom:1px solid #1f2a37;display:flex;justify-content:space-between;align-items:center}
+header h1{margin:0;font-size:18px;letter-spacing:.5px}
+header small{color:#8a9bb5}
+.wrap{max-width:1200px;margin:0 auto;padding:20px;display:grid;grid-template-columns:380px 1fr;gap:20px}
+.card{background:#121a26;border:1px solid #1f2a37;border-radius:12px;padding:16px}
+.card h3{margin:0 0 12px;font-size:14px;color:#8a9bb5;text-transform:uppercase;letter-spacing:.8px}
+.drop{border:2px dashed #2a3a52;border-radius:10px;padding:24px;text-align:center;background:#0e1522;cursor:pointer;transition:.2s}
+.drop.drag{border-color:#4aa3ff;background:#10233f}
+.drop input{display:none}
+.btn{background:#4aa3ff;color:#0b0f14;border:0;padding:10px 16px;border-radius:8px;font-weight:600;cursor:pointer;width:100%}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.row{display:flex;gap:8px;margin-top:10px}
+.row select,.row input{flex:1;background:#0e1522;border:1px solid #2a3a52;color:#e6eef6;padding:8px;border-radius:8px}
+video{width:100%;border-radius:10px;background:#000;max-height:360px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{color:#8a9bb5;text-align:left;font-weight:500;padding:8px;border-bottom:1px solid #1f2a37}
+td{padding:8px;border-bottom:1px solid #1a2332}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600}
+.badge-line{background:#ffe58f;color:#614700}
+.badge-dwell{background:#ff7875;color:#5c0011}
+.kpi{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.kpi div{background:#0e1522;border:1px solid #1f2a37;border-radius:10px;padding:12px;text-align:center}
+.kpi b{font-size:20px;display:block}
+.kpi span{color:#8a9bb5;font-size:12px}
+.mono{font-family:ui-monospace,monospace;font-size:12px}
+@media(max-width:900px){.wrap{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+<h1>Real-Time Video Analytics <small>M5 — YOLO + ByteTrack + Line/ROI/Dwell</small></h1>
+<small id="health">● checking...</small>
+</header>
+<div class="wrap">
+<div>
+<div class="card">
+<h3>上传视频</h3>
+<div class="drop" id="drop">
+<p>拖拽 MP4 到此处<br>或点击选择</p>
+<input type="file" id="file" accept=".mp4,.avi,.mov,.mkv">
+</div>
+<div class="row">
+<select id="device"><option value="auto">auto (MPS)</option><option value="cpu">cpu</option><option value="mps">mps</option></select>
+<input id="conf" type="number" step="0.05" min="0.1" max="0.9" value="0.25" placeholder="conf">
+</div>
+<button class="btn" id="btn" disabled>选择视频后处理</button>
+<div id="progress" class="mono" style="margin-top:10px;color:#8a9bb5"></div>
+</div>
+<div class="card" style="margin-top:16px">
+<h3>实时指标</h3>
+<div class="kpi">
+<div><b id="k_total">—</b><span>Total Frames</span></div>
+<div><b id="k_fps">—</b><span>FPS</span></div>
+<div><b id="k_line">—</b><span>Line Cross</span></div>
+<div><b id="k_occ">—</b><span>Max Occupancy</span></div>
+<div><b id="k_dwell">—</b><span>Dwell Events</span></div>
+<div><b id="k_time">—</b><span>Elapsed</span></div>
+</div>
+</div>
+<div class="card" style="margin-top:16px">
+<h3>配置</h3>
+<pre id="cfg" class="mono" style="white-space:pre-wrap;background:#0e1522;padding:10px;border-radius:8px;max-height:180px;overflow:auto">loading...</pre>
+</div>
+</div>
+<div>
+<div class="card">
+<h3>处理后视频</h3>
+<video id="video" controls poster=""></video>
+<div class="mono" id="vinfo" style="margin-top:8px;color:#8a9bb5"></div>
+</div>
+<div class="card" style="margin-top:16px">
+<h3>事件记录 <small id="evcount" style="color:#8a9bb5"></small></h3>
+<table><thead><tr><th>类型</th><th>Track</th><th>帧</th><th>时间</th><th>截图</th></tr></thead><tbody id="tbody"><tr><td colspan="5" style="color:#8a9bb5">暂无 — 上传后自动填充</td></tr></tbody></table>
+</div>
+</div>
+</div>
+<script>
+const $ = s=>document.querySelector(s);
+const drop = $('#drop'), fileIn = $('#file'), btn = $('#btn'), video = $('#video');
+let file = null;
+async function health(){
+  try{
+    const r = await fetch('/health'); const j=await r.json();
+    $('#health').textContent='● '+j.status+' '+j.version;
+    $('#health').style.color='#52c41a';
+  }catch{ $('#health').textContent='● offline'; $('#health').style.color='#ff4d4f';}
+}
+async function cfg(){
+  try{
+    const r=await fetch('/api/config'); const j=await r.json();
+    $('#cfg').textContent=JSON.stringify(j,null,2);
+  }catch{ $('#cfg').textContent='failed';}
+}
+health(); cfg(); setInterval(health, 10000);
+
+drop.onclick = ()=> fileIn.click();
+drop.ondragover = e=>{e.preventDefault(); drop.classList.add('drag');}
+drop.ondragleave = ()=> drop.classList.remove('drag');
+drop.ondrop = e=>{e.preventDefault(); drop.classList.remove('drag'); file=e.dataTransfer.files[0]; gotFile();}
+fileIn.onchange = e=>{ file=e.target.files[0]; gotFile(); }
+function gotFile(){
+  if(!file) return;
+  btn.disabled=false;
+  btn.textContent='处理 '+file.name+' ('+(file.size/1024/1024).toFixed(1)+' MB)';
+  $('#progress').textContent='';
+}
+btn.onclick = async()=>{
+  if(!file) return;
+  btn.disabled=true; btn.textContent='处理中… (10-20s)'; $('#progress').textContent='上传中...';
+  const fd=new FormData();
+  fd.append('file', file);
+  fd.append('device', $('#device').value);
+  fd.append('conf', $('#conf').value);
+  try{
+    const r=await fetch('/process',{method:'POST', body:fd});
+    const j=await r.json();
+    if(!r.ok) throw new Error(j.detail||'failed');
+    $('#progress').textContent='完成! '+(j.stats.elapsed_sec||'')+'s, fps '+(j.stats.proc_fps||'');
+    // video
+    video.src=j.video_url+'&t='+Date.now();
+    video.load(); video.play().catch(()=>{});
+    $('#vinfo').textContent=j.video_url + ' — ' + j.stats.total_frames+'f, '+j.stats.events_count+' events';
+    // kpi
+    $('#k_total').textContent=j.stats.total_frames;
+    $('#k_fps').textContent=j.stats.proc_fps;
+    $('#k_line').textContent=j.stats.line_crossing.total;
+    $('#k_occ').textContent=j.stats.roi.max_occupancy;
+    $('#k_dwell').textContent=j.stats.roi.total_dwell;
+    $('#k_time').textContent=j.stats.elapsed_sec+'s';
+    refreshEvents();
+  }catch(e){
+    $('#progress').textContent='失败: '+e.message;
+    btn.disabled=false;
+  }
+}
+async function refreshEvents(){
+  const r=await fetch('/events?limit=100'); const evs=await r.json();
+  $('#evcount').textContent='共 '+evs.length;
+  const tb=$('#tbody'); tb.innerHTML='';
+  if(!evs.length){ tb.innerHTML='<tr><td colspan=5 style=\"color:#8a9bb5\">无事件</td></tr>'; return; }
+  for(const e of evs.slice().reverse().slice(0,30)){
+    const tr=document.createElement('tr');
+    const badge = e.type==='line_cross'? '<span class=badge badge-line>LINE</span>' : '<span class=badge badge-dwell>DWELL</span>';
+    const snap = e.snapshot ? `<a href="/snapshots/${e.snapshot.split('/').pop()}" target="_blank"><img src="/snapshots/${e.snapshot.split('/').pop()}" style="width:48px;height:32px;object-fit:cover;border-radius:4px"></a>` : '—';
+    tr.innerHTML=`<td>${badge}</td><td>#${e.track_id} ${e.class_name}</td><td>${e.frame_idx}</td><td>${e.timestamp}s</td><td>${snap}</td>`;
+    tb.appendChild(tr);
+  }
+}
+// auto refresh events every 5s (for polling)
+setInterval(refreshEvents, 5000);
+</script>
+</body>
+</html>

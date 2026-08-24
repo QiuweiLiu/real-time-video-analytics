@@ -47,3 +47,9 @@
 - Decision: event_id = f"{type}_{track}_{frame}_{uuid4[:4]}", snapshot按 bbox*expand(0.2) clamp至帧内, min10px, snapshot_max 100
 - Reason: uuid保证唯一, expand保留上下文, clamp防空图, 统一 logger JSONL便于追加与流式读取
 - Evidence: events/logger.py, snapshot.py save_snapshot, tests/test_events.py 6 passed, sample 4截图 line_demo 8截图
+
+## 2026-08-24 — M5 服务与 RTSP
+- Context: 需将本地管道服务化且支持流, 但保持同步简单与本地复用
+- Decision: FastAPI 同步调用 VideoPipeline (非后台队列), 上传限50MB, VideoSource _is_stream 识别 rtsp/http/数字, max_frames 300 防无限, dashboard 纯静态 HTML 无构建
+- Reason: 同步保证 Portfolio 可演示确定性 (10-20s), 避免 Celery/Redis 复杂度; _is_stream 统一文件与流, 复用现有 pipeline; 静态 dashboard 最小依赖
+- Evidence: api/app.py 5 endpoints, api/static/dashboard.html, VideoSource 4 tests, api 5 tests, curl POST sample 80f

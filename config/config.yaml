@@ -1,4 +1,4 @@
-# Real-Time Video Analytics — M4 Config
+# Real-Time Video Analytics — M5 Config
 model: yolov8n.pt
 source: assets/sample.mp4
 output: outputs/result.mp4
@@ -34,3 +34,12 @@ events:
   snapshot_dir: outputs/snapshots
   snapshot_expand: 0.2  # bbox 外扩 20%
   snapshot_max: 100
+
+# M5 Server + RTSP
+server:
+  host: 0.0.0.0
+  port: 8000
+
+rtsp:
+  max_frames: 300  # RTSP流最多处理帧数 (防无限)
+  timeout_sec: 5.0

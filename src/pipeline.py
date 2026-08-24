@@ -58,7 +58,11 @@ class VideoPipeline:
         t0 = time.time()
 
         try:
-            source = VideoSource(src)
+            from .source.video_source import _is_stream
+            max_frames = None
+            if _is_stream(str(src)):
+                max_frames = getattr(self.config, "rtsp", None).max_frames if hasattr(self.config, "rtsp") else 300
+            source = VideoSource(src, max_frames=max_frames)
             print(f"[source] {source.info()}")
 
             tracker = YOLOTracker(

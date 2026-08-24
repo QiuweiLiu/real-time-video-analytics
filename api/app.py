@@ -71,15 +71,31 @@ def get_events(limit: int = 100):
     return events
 
 
+ALLOWED_VIDEO_EXTS = {".mp4", ".avi", ".mov", ".mkv"}
+
+
+def _safe_outputs_video_path(path: str) -> Path:
+    """Resolve path strictly inside outputs/ with an allowed video extension.
+
+    Raises HTTPException on any violation (traversal, outside dir, bad ext, missing).
+    """
+    if not path or "\x00" in path:
+        raise HTTPException(400, "invalid path")
+    p = (ROOT / path).resolve()
+    outputs_root = OUTPUTS.resolve()
+    # strict containment: resolved path must be inside outputs/ (never equal to root)
+    if not p.is_relative_to(outputs_root) or p == outputs_root:
+        raise HTTPException(403, "path outside outputs/ is not allowed")
+    if p.suffix.lower() not in ALLOWED_VIDEO_EXTS:
+        raise HTTPException(400, f"video extension not allowed: {p.suffix or '(none)'}")
+    if not p.is_file():
+        raise HTTPException(404, "video not found")
+    return p
+
+
 @app.get("/video")
 def get_video(path: str = "outputs/result.mp4"):
-    # security: only allow outputs/ files
-    p = (ROOT / path).resolve()
-    if not str(p).startswith(str(ROOT.resolve())) or not p.exists():
-        # fallback to default result
-        p = OUTPUTS / "result.mp4"
-        if not p.exists():
-            raise HTTPException(404, "video not found")
+    p = _safe_outputs_video_path(path)
     return FileResponse(str(p), media_type="video/mp4")
 
 

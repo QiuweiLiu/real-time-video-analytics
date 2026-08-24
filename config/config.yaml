@@ -43,3 +43,5 @@ server:
 rtsp:
   max_frames: 300  # RTSP流最多处理帧数 (防无限)
   timeout_sec: 5.0
+  reconnect_attempts: 3  # 断流后重连次数 (基础 RTSP)
+  reconnect_delay: 0.5   # 重连间隔秒, 指数退避

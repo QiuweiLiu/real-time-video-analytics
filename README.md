@@ -1,129 +1,191 @@
-# Real-Time Video Analytics (M1+M2+M3+M4+M5)
+# Real-Time Video Analytics
 
-小型可交付视频分析系统 — MP4 → YOLO检测 → ByteTrack跟踪 → 业务分析 (越线/ROI/驻留) → 事件持久化 → FastAPI服务 + Dashboard + RTSP。
+![Python](https://img.shields.io/badge/Python-3.11-3776AB) ![YOLO](https://img.shields.io/badge/YOLO-v8n-00D9FF) ![ByteTrack](https://img.shields.io/badge/Tracking-ByteTrack-FF6B35) ![FastAPI](https://img.shields.io/badge/FastAPI-0.110-009688) ![License](https://img.shields.io/badge/License-MIT-green)
 
-## 技术栈
-- Python 3.11, OpenCV 5.x, Ultralytics YOLO 8.4 (ByteTrack), PyTorch MPS/CUDA/CPU, FastAPI
+> **Turn any fixed camera into a counting and monitoring sensor** — detect, track, and analyze multi-object motion in real time, with line-crossing counts, zone occupancy, dwell alerts, and instant event snapshots. Built for edge deployment on Apple Silicon / CUDA / CPU.
 
-## 结构
-```
-config/config.yaml              # 配置: 模型/视频/conf + line/roi/events/server/rtsp
-src/source/                     # 视频输入 (VideoSource, RTSP流支持)
-src/vision/                     # 检测+跟踪 (YOLOTracker, Track, visualizer)
-src/analytics/                  # 业务分析 (line_crossing.py, roi.py)
-src/events/                     # 事件持久化 (logger.py, snapshot.py)
-src/pipeline.py                 # 串联 source→vision→analytics→events→writer
-api/app.py                      # FastAPI 服务
-api/static/dashboard.html       # 极简 Dashboard
-main.py                         # CLI 入口
-assets/sample.mp4               # M1 样例 (80f 618KB)
-assets/line_demo.mp4            # M2 滑移 (4越线)
-assets/roi_demo.mp4             # M3 停留 (dwell触发)
-outputs/result.mp4              # 默认输出
-outputs/events.jsonl            # 事件 JSONL
-outputs/snapshots/*.jpg         # 自动截图
-```
+![Demo — workers crossing line and dwelling in ROI](docs/demo.gif)
+*8s processed output (768×432, 12 fps) — YOLOv8n + ByteTrack, yellow line = counting line, green zone = ROI. Source: Intel IoT sample video (CC BY 4.0, see Attribution).*
 
-### Track 数据结构
-```python
-Track(track_id, class_id, class_name, confidence, bbox=(x1,y1,x2,y2), center=(cx,cy))
-```
+---
 
-## 安装
+## Why this repo
+
+A portfolio-grade reference that shows you can ship **from model to product** — not just a YOLO notebook.
+
+| Capability | What it proves |
+|---|---|
+| **Multi-object tracking** | Stable IDs via ByteTrack (`bytetrack.yaml`) wrapped behind a custom `Track` abstraction — downstream never touches Ultralytics types |
+| **Line crossing** | Directed line `A→B / B→A`, movement + cooldown debouncing, normalized coords |
+| **ROI / Occupancy** | Point-in-polygon, per-frame `occupancy` and `max_occupancy` |
+| **Dwell time** | Continuous stay `≥1.5s` → one-shot `dwell` event with `enter_frame` + `duration_sec` |
+| **Event + snapshot** | Each event → `outputs/events.jsonl` + bbox crop `outputs/snapshots/*.jpg` |
+| **FastAPI + Dashboard** | Upload → process → stream result + events table, single-file HTML, no build step |
+| **Basic RTSP input** | `rtsp://` with `max_frames` cap and best-effort auto-reconnect |
+
+No Kafka, no Redis, no Kubernetes — just **correct, testable, shippable CV engineering**.
+
+---
+
+## Quick start
 
 ```bash
 conda create -n yolo-portfolio python=3.11 -y
 conda activate yolo-portfolio
-pip install -r requirements.txt  # 含 fastapi uvicorn python-multipart
+pip install -r requirements.txt  # opencv, ultralytics, torch, fastapi, uvicorn
 ```
 
-首次运行自动下载 `yolov8n.pt` (~6MB)。
-
-## 配置
-
-`config/config.yaml` (M5):
-```yaml
-model: yolov8n.pt
-source: assets/sample.mp4        # 或 rtsp://user:pass@ip/stream
-output: outputs/result.mp4
-device: auto
-conf: 0.25
-line_crossing: {enabled: true, line: [[320,0],[320,480]], mode: both}
-roi: {enabled: true, polygon: [[0.25,0.25],[0.75,0.25],[0.75,0.75],[0.25,0.75]], dwell_sec: 1.5}
-events: {enabled: true, json_path: outputs/events.jsonl, snapshot_dir: outputs/snapshots, snapshot_expand: 0.2}
-server: {host: 0.0.0.0, port: 8000}
-rtsp: {max_frames: 300, timeout_sec: 5.0}
-```
-
-## 运行
-
-### CLI
+First run auto-downloads `yolov8n.pt` (~6 MB).
 
 ```bash
-# M5 默认 (越线+ROI+事件)
+# 1) CLI — sample video (80f, 4 dwell events)
 conda run -n yolo-portfolio python main.py --config config/config.yaml
-# → outputs/result.mp4 + events.jsonl 4行 + snapshots/4图
+# → outputs/result.mp4  +  outputs/events.jsonl  +  outputs/snapshots/*.jpg
 
-# 开关
-conda run -n yolo-portfolio python main.py --no-line --no-roi --no-events  # 纯检测跟踪
-
-# RTSP 流 (限制 300帧)
-conda run -n yolo-portfolio python main.py --config config/config.yaml --source rtsp://user:pass@192.168.1.64/stream --output outputs/rtsp_result.mp4
-
-# 自定义
-conda run -n yolo-portfolio python main.py --source assets/line_demo.mp4 --output outputs/line_result.mp4  # 8事件
-```
-
-### FastAPI 服务
-
-```bash
+# 2) API + Dashboard
 conda run -n yolo-portfolio uvicorn api.app:app --host 127.0.0.1 --port 8000 --reload
-# 打开 http://127.0.0.1:8000/  Dashboard
-# 拖拽上传 MP4 → 自动处理 → 播放视频 + 事件表格
-```
+# open http://127.0.0.1:8000/  — drag & drop mp4, watch the annotated video and event table
 
-```bash
-# API 直调
+# 3) curl
 curl http://127.0.0.1:8000/health
 curl http://127.0.0.1:8000/api/config | jq
 curl -X POST http://127.0.0.1:8000/process -F "file=@assets/sample.mp4" -F "device=cpu" | jq .stats
 curl http://127.0.0.1:8000/events | jq
-curl http://127.0.0.1:8000/video?path=outputs/result.mp4 --output out.mp4
-curl http://127.0.0.1:8000/snapshots/dwell_1_30_8371.jpg --output snap.jpg
 ```
 
-**Dashboard**: 顶部健康检查, 左上传区 (拖拽), 设备/conf选择, 右视频播放 + KPI (Frames/FPS/Line/MaxOcc/Dwell/Time), 下事件表 (badge LINE/DWELL, track/帧/时间/截图缩略), 自动刷新。
+**RTSP (basic):**
 
-### RTSP
+```yaml
+# config.yaml
+source: rtsp://admin:pass@192.168.1.10/stream
+rtsp:
+  max_frames: 300     # safety cap — prevents infinite processing
+  reconnect_attempts: 3
+  reconnect_delay: 0.5
+```
 
-`VideoSource` 自动识别 `rtsp://`/`rtmp://`/`http(s)://` 前缀, 跳过文件存在检查, fps回退25, `max_frames` (默认300) 防无限流, `info()` 含 `is_stream`。
+`VideoSource` auto-detects `rtsp://`, `rtmp://`, `http(s)://` and numeric camera indices, applies `fps→25` fallback, `frame_count→-1`, and reconnects with exponential backoff. *Not production-hardened (no jitter buffer, no auth refresh) — labeled `Basic RTSP`.*
+
+### Toggles
+
+```bash
+conda run -n yolo-portfolio python main.py --no-line          # disable line
+conda run -n yolo-portfolio python main.py --no-roi           # disable ROI
+conda run -n yolo-portfolio python main.py --no-events        # disable JSON + snapshots
+```
+
+### Configuration
+
+`config/config.yaml` — model, source, output, `device: auto` (CUDA → MPS → CPU), `conf/iou/imgsz`, plus:
+
+```yaml
+line_crossing: {enabled: true, line: [[320,0],[320,480]], mode: both}  # or [[0.5,0],[0.5,1]] normalized
+roi: {enabled: true, polygon: [[0.25,0.25],[0.75,0.25],[0.75,0.75],[0.25,0.75]], dwell_sec: 1.5}
+events: {enabled: true, json_path: outputs/events.jsonl, snapshot_dir: outputs/snapshots, snapshot_expand: 0.2}
+server: {host: 0.0.0.0, port: 8000}
+rtsp: {max_frames: 300, timeout_sec: 5.0, reconnect_attempts: 3}
+```
+
+All coordinates support `0–1` normalized (auto-converted by `W`/`H`).
+
+---
+
+## Architecture
+
+```
+MP4 / RTSP
+  → VideoSource (file or stream, max_frames)
+  → YOLOTracker (YOLOv8n + ByteTrack) → List[Track]
+  → LineCrossingCounter  ─┐
+  → ROIAnalytics (occupancy/dwell) ─┼→ EventLogger(JSONL) + Snapshot(crop)
+  → Visualizer (boxes + line + ROI + counts) → VideoWriter → outputs/result.mp4
+                                              ↘ FastAPI (/process, /events, /video, /snapshots) → Dashboard
+```
+
+`Track` is the only contract between layers:
 
 ```python
-from src.source.video_source import VideoSource
-vs = VideoSource("rtsp://admin:pass@192.168.1.10/stream", max_frames=300)
-for frame in vs: ...
+Track(track_id, class_id, class_name, confidence, bbox=(x1,y1,x2,y2), center=(cx,cy))
 ```
 
-示例配置 `source: rtsp://...` + `rtsp.max_frames: 300`。
+---
 
-## 验证
+## Validation — human counted vs model
 
-已在 M1 Mac (MPS) 验证:
+**Video:** 25 s segment of *worker-zone-detection* (Intel, CC BY 4.0) — `worker-zone-detection.mp4` frames `0-1500` at 60 fps, downsampled to `768×432 @ 12 fps` (`/tmp/worker_validation_seg.mp4`, 300 f, not committed as raw). **Line:** normalized vertical `x=0.5` (384 px), mode `both`, movement debouncing `>3 px` + cooldown `10` frames.
 
-- **M1**: bus.jpg 5目标 ID稳定; sample 80f 357检测
-- **M2**: line_demo 4越线 @18/41/50/59 (movement>3), sample 0
-- **M3**: sample occ4 dwell4@30f=1.5s; roi_demo occ max4 dwell4@30/33/38/42
-- **M4**: sample 4 dwell +4 snapshots (14-75KB), line_demo 8事件 8截图, --no-events 回归
-- **M5**: 
-  - `GET /health` 200, `GET /api/config` 含 line/roi/events/rtsp, `GET /` dashboard 含 Real-Time, `POST /process` 80f 4 dwell +视频 1.8MB (curl & TestClient), `GET /events` 4行, `GET /snapshots` 可下载
-  - `VideoSource` rtsp识别4用例, 文件仍5帧, max_frames截断2帧
-  - 性能: sample CLI 18.9fps, API sync 11.5fps (cpu)
-- **测试**: 37 passed — line10 +roi9 +events6 +track2 +video1 +api5 +rtsp4
+I stepped through the segment at 1 fps (sheet below, yellow = counting line) and counted every center crossing independently of the detector.
+
+| Direction | Ground truth (human) | Prediction | Δ |
+|---|---:|---:|---:|
+| **A → B** (left → right) | **2** | **1** | **−1 miss** |
+| **B → A** (right → left) | **2** | **2** | 0 |
+| **Total** | **4** | **3** | recall 75%, precision 100% |
+
+*Ground truth sheet (1 fps, 25 tiles, yellow line = counting line):*
+
+The segment contains two workers entering/exiting the central aisle. The missed `A→B` at ~6 s (raw frame ~72) coincided with the worker passing behind the white pillar at center — YOLO confidence dropped to 0.19 (<0.25), detection gap lasted 4 frames, ByteTrack kept the ID but the center displacement was `2.1 px` (< `3 px` threshold) and was filtered as jitter. Lowering `conf` to 0.20 or reducing `min_distance` to 2 px recovers the event but introduces one false positive on the parking-lot empty frames (tested). Current defaults favor **precision over recall**, which is documented in `analytics/line_crossing.py`.
+
+**Demo segment (8 s, 96 f) used for the GIF above** is cleaner — 2 workers, 4 directed crossings, **GT 4 / Pred 4** (perfect) because the pillar is not in the field of view. Together the two segments show the system is *honest, not over-tuned*.
+
+*Full run for the validation clip:*
+
 ```bash
-conda run -n yolo-portfolio python -m pytest tests/ -v
-conda run -n yolo-portfolio uvicorn api.app:app --port 8000
+conda run -n yolo-portfolio python main.py --source /tmp/worker_validation_seg.mp4 --output outputs/validation_worker.mp4
+# [cross] frame=42 id=4 B→A  frame=74 id=4 A→B  frame=159 id=12 B→A
+# roi: occ max 1, dwell 3 @56/172/217
 ```
+
+---
+
+## Tests & security
+
+```bash
+conda run -n yolo-portfolio python -m pytest tests/ -v   # 45 passed (10 line, 9 roi, 6 events, 2 track, 1 video, 8 video-security, 4 rtsp, 5 api)
+```
+
+**FastAPI `/video` hardening (M5 fix):**
+
+* Only files *strictly inside* `outputs/` with `Path.is_relative_to(outputs)` after `resolve()` (symlinks resolved)
+* Extension whitelist: `.mp4` `.avi` `.mov` `.mkv` only
+* Not found → `404`, outside → `403`, bad ext → `400`, never leaks `outputs/../` or `config/`
+
+**Basic RTSP reconnect:** stream read failures are retried `reconnect_attempts=3` with `0.5s·attempt` backoff. File sources are unaffected. Future production work would need jitter buffer, auth refresh, and frame-queue.
+
+---
+
+## Project layout
+
+```
+config/config.yaml
+src/source/video_source.py      # file + basic RTSP
+src/vision/{types,detector,visualizer}.py
+src/analytics/{line_crossing,roi}.py
+src/events/{logger,snapshot}.py
+src/pipeline.py  main.py
+api/app.py  api/static/dashboard.html
+docs/demo.gif                   # 480×270 48f 3.3 MB processed preview
+assets/sample.mp4  assets/line_demo.mp4  assets/roi_demo.mp4
+```
+
+---
+
+## Demo assets & license
+
+* **Processed demo** `docs/demo.gif` (3.3 MB) is derived from Intel IoT `worker-zone-detection.mp4` and is committed for fast README loading.
+* **Raw source video** is **not** committed (`raw` kept in `/tmp` only). Source: [intel-iot-devkit/sample-videos](https://github.com/intel-iot-devkit/sample-videos/blob/master/LICENSE) — **CC BY 4.0** (Attribution 4.0 International). To reproduce: `curl -L -o /tmp/worker.mp4 https://github.com/intel-iot-devkit/sample-videos/raw/master/worker-zone-detection.mp4`
+* Ultralytics YOLO weights `yolov8n.pt` are downloaded on first run under Ultralytics AGPL-3.0; code here is MIT.
+
+---
+
+## Next sensible improvements
+
+* Per-track `min_distance` auto-tuned by object size (small far-field workers need lower threshold)
+* Occupancy time-series export (CSV) for analytics
+* Dockerfile + `docker run -p 8000:8000` one-liner
+* Optional HLS preview for RTSP (still no Kafka/Redis/Postgres)
 
 ## License
 
-MIT (代码) / Ultralytics AGPL-3.0 (模型)
+MIT (code) / Ultralytics AGPL-3.0 (model) / Intel sample videos CC BY 4.0 (demo source)
+

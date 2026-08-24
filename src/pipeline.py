@@ -60,9 +60,14 @@ class VideoPipeline:
         try:
             from .source.video_source import _is_stream
             max_frames = None
+            reconnect_attempts = 0
+            reconnect_delay = 0.5
             if _is_stream(str(src)):
-                max_frames = getattr(self.config, "rtsp", None).max_frames if hasattr(self.config, "rtsp") else 300
-            source = VideoSource(src, max_frames=max_frames)
+                rtsp = getattr(self.config, "rtsp", None)
+                max_frames = getattr(rtsp, "max_frames", 300) if rtsp else 300
+                reconnect_attempts = getattr(rtsp, "reconnect_attempts", 3) if rtsp else 3
+                reconnect_delay = getattr(rtsp, "reconnect_delay", 0.5) if rtsp else 0.5
+            source = VideoSource(src, max_frames=max_frames, reconnect_attempts=reconnect_attempts, reconnect_delay=reconnect_delay)
             print(f"[source] {source.info()}")
 
             tracker = YOLOTracker(

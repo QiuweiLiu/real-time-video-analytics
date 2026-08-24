@@ -41,6 +41,8 @@ class ServerConfig:
 class RTSPConfig:
     max_frames: int
     timeout_sec: float
+    reconnect_attempts: int
+    reconnect_delay: float
 
 
 @dataclass(frozen=True)
@@ -144,7 +146,9 @@ def _parse_rtsp(raw: dict) -> RTSPConfig:
     rc = raw.get("rtsp", {}) or {}
     max_frames = int(rc.get("max_frames", 300))
     timeout_sec = float(rc.get("timeout_sec", 5.0))
-    return RTSPConfig(max_frames=max_frames, timeout_sec=timeout_sec)
+    reconnect_attempts = int(rc.get("reconnect_attempts", rc.get("reconnect", 3)))
+    reconnect_delay = float(rc.get("reconnect_delay", 0.5))
+    return RTSPConfig(max_frames=max_frames, timeout_sec=timeout_sec, reconnect_attempts=reconnect_attempts, reconnect_delay=reconnect_delay)
 
 
 def load_config(path: str | Path) -> PipelineConfig:

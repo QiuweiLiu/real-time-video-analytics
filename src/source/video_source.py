@@ -1,4 +1,6 @@
-"""VideoSource — OpenCV VideoCapture wrapper with RTSP/stream support."""
+"""VideoSource — OpenCV VideoCapture wrapper with basic RTSP/stream support."""
+
+import time
 
 import cv2
 from pathlib import Path
@@ -11,10 +13,18 @@ def _is_stream(path: str) -> bool:
 
 
 class VideoSource:
-    def __init__(self, path: str | Path, max_frames: int | None = None):
+    def __init__(
+        self,
+        path: str | Path,
+        max_frames: int | None = None,
+        reconnect_attempts: int = 0,
+        reconnect_delay: float = 0.5,
+    ):
         self.raw_path = str(path)
         self.is_stream = _is_stream(self.raw_path)
         self.max_frames = max_frames  # for RTSP limiting, None = no limit / file's count
+        self.reconnect_attempts = reconnect_attempts if self.is_stream else 0
+        self.reconnect_delay = reconnect_delay
 
         if self.is_stream:
             # stream: don't check file exists
@@ -53,13 +63,36 @@ class VideoSource:
         self.fourcc = int(self.cap.get(cv2.CAP_PROP_FOURCC))
         self._read_count = 0
 
+    def _reopen(self) -> bool:
+        """Attempt to re-open the stream (best-effort reconnect)."""
+        try:
+            self.cap.release()
+        except Exception:
+            pass
+        src = int(self.raw_path) if self.raw_path.isdigit() else self.raw_path
+        self.cap = cv2.VideoCapture(src)
+        return self.cap.isOpened()
+
+    def _read_with_reconnect(self):
+        ok, frame = self.cap.read()
+        if (ok and frame is not None) or not self.is_stream or self.reconnect_attempts <= 0:
+            return ok, frame
+        # stream read failed — try reconnect with backoff
+        for attempt in range(1, self.reconnect_attempts + 1):
+            time.sleep(self.reconnect_delay * attempt)
+            if self._reopen():
+                ok, frame = self.cap.read()
+                if ok and frame is not None:
+                    return ok, frame
+        return False, None
+
     def __iter__(self) -> Iterator:
         return self
 
     def __next__(self):
         if self.max_frames is not None and self._read_count >= self.max_frames:
             raise StopIteration
-        ok, frame = self.cap.read()
+        ok, frame = self._read_with_reconnect()
         if not ok or frame is None:
             raise StopIteration
         self._read_count += 1
@@ -68,7 +101,7 @@ class VideoSource:
     def read(self) -> Tuple[bool, any]:
         if self.max_frames is not None and self._read_count >= self.max_frames:
             return False, None
-        ok, frame = self.cap.read()
+        ok, frame = self._read_with_reconnect()
         if ok:
             self._read_count += 1
         return ok, frame

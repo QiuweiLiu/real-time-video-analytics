@@ -1,17 +1,17 @@
 # HANDOFF
 
-Goal: M5 FastAPI+Dashboard+RTSP (最终)
+Goal: M1-M5 全部交付并已发布 GitHub
 Done:
-- Config server/port + rtsp.max_frames/timeout + events/server/rtsp 解析
-- VideoSource _is_stream + max_frames + fps fallback 25 + is_stream flag
-- FastAPI api/app.py (health/config/process/events/video/snapshots + CORS + static), dashboard.html 极简上传+视频+KPI+事件表
-- Tests 5 api (health/config/events/dashboard/upload) +4 rtsp, 28→37 passed
-- 验证: uvicorn :8001 health200 config dashboard, curl POST sample 80f 4 dwell, GET /events 4, VideoSource 4, dashboard 拖拽
+- M1 管道 / M2 越线 / M3 ROI+占用+驻留 / M4 JSONL+截图 / M5 FastAPI+Dashboard+RTSP
+- 37 tests passed, 5 commits, tag M5-v1.0
+- 已发布: github.com/QiuweiLiu/real-time-video-analytics (public), topics 11个
 Verified:
-- 端到端 80f 1.89MB + json 4 + snapshots 4, API 11.5fps, RTSP识别, 37 tests
+- 远端 main 含全部5提交, tag M5-v1.0 → 46f25a8
+- 提交内容 secret 扫描干净 (无 ghp_/token 字样)
+- 推送用临时凭据文件已删除 (/tmp/gh_rtva_token)
 Rejected: —
-Open: 无
-Active: 待 commit/push
-Next:
-1. commit → push
-2. 发布: git tag M5, README 最终, 可选 Docker/Pages
+Open:
+- 用户侧: 建议立即撤销聊天中提供过的 GitHub token
+- 可选后续: Dockerfile, 演示 GIF, Release 附 outputs 样例
+Active: 项目交付完成
+Next: 无必须项; 后续增强按用户需求启动

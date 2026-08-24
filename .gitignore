@@ -26,3 +26,6 @@ Thumbs.db
 # experiment
 .scratch/
 scratch/
+
+# project control plane (local-only)
+.project/

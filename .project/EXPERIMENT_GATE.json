@@ -1,9 +1,0 @@
-{
-  "gate": "not_required",
-  "reason": "M1 is local engineering verification, not a formal experiment. No hypothesis/baseline/statistical claim.",
-  "commit": null,
-  "config": "config/config.yaml",
-  "baseline": null,
-  "metrics": ["output video exists", "frame count matches input", "Track ID persists across frames"],
-  "estimated_compute": "CPU/MPS single video, <5min, no GPU quota needed"
-}

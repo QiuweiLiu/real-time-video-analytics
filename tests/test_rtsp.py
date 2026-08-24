@@ -50,3 +50,39 @@ def test_stream_max_frames_limit():
     frames = list(vs)
     assert len(frames) == 2
     tmp.unlink(missing_ok=True)
+
+
+def test_stream_reconnect_mock():
+    import cv2, numpy as np
+    from unittest.mock import Mock, patch
+
+    fake_frame = np.zeros((10, 10, 3), dtype=np.uint8)
+
+    # First capture: read fails once, then after reconnect a new capture succeeds
+    mock_first = Mock()
+    mock_first.isOpened.return_value = True
+    mock_first.get.side_effect = lambda prop: {0: 10, 1: 10, 5: 25.0, 7: -1}.get(prop, 0)
+    mock_first.read.return_value = (False, None)
+
+    mock_second = Mock()
+    mock_second.isOpened.return_value = True
+    mock_second.get.side_effect = mock_first.get.side_effect
+    mock_second.read.return_value = (True, fake_frame)
+
+    # VideoSource will call cv2.VideoCapture twice: once in __init__, once in _reopen
+    with patch("src.source.video_source.cv2.VideoCapture", side_effect=[mock_first, mock_second]) as mock_cap:
+        vs = VideoSource("rtsp://test/stream", max_frames=1, reconnect_attempts=1, reconnect_delay=0.01)
+        frames = list(vs)
+        assert len(frames) == 1
+        assert mock_cap.call_count == 2  # init + one reconnect
+
+    # file source should not enable reconnect even if passed (outside patch)
+    import pathlib
+    tmp2 = pathlib.Path("/tmp/reconnect_file2.mp4")
+    w2 = cv2.VideoWriter(str(tmp2), cv2.VideoWriter_fourcc(*"mp4v"), 10, (10, 10))
+    w2.write(np.zeros((10,10,3), dtype=np.uint8))
+    w2.release()
+    vs2 = VideoSource(str(tmp2), max_frames=1, reconnect_attempts=3)
+    assert vs2.is_stream is False
+    assert vs2.reconnect_attempts == 0
+    tmp2.unlink(missing_ok=True)

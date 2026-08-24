@@ -5,7 +5,12 @@ import cv2
 from pathlib import Path
 import numpy as np
 
-src_img = Path("/opt/miniconda3/envs/yolo-portfolio/lib/python3.11/site-packages/ultralytics/assets/bus.jpg")
+try:
+    from ultralytics.utils import ASSETS as ULTRALYTICS_ASSETS
+    src_img = Path(ULTRALYTICS_ASSETS) / "bus.jpg"
+except Exception:
+    import ultralytics
+    src_img = Path(ultralytics.__file__).parent / "assets" / "bus.jpg"
 out = Path("assets/line_demo.mp4")
 out.parent.mkdir(parents=True, exist_ok=True)
 

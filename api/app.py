@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.utils.config import load_config
 from src.pipeline import VideoPipeline
 
-app = FastAPI(title="Real-Time Video Analytics", version="M5")
+app = FastAPI(title="Real-Time Video Analytics", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -35,7 +35,7 @@ EVENTS_JSON = OUTPUTS / "events.jsonl"
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "version": "M5", "model": "yolov8n.pt"}
+    return {"status": "ok", "version": "0.1.0", "model": "yolov8n.pt"}
 
 
 @app.get("/api/config")

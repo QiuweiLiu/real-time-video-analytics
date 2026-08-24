@@ -4,7 +4,12 @@
 import cv2
 from pathlib import Path
 
-src_img = Path("/opt/miniconda3/envs/yolo-portfolio/lib/python3.11/site-packages/ultralytics/assets/bus.jpg")
+try:
+    from ultralytics.utils import ASSETS as ULTRALYTICS_ASSETS
+    src_img = Path(ULTRALYTICS_ASSETS) / "bus.jpg"
+except Exception:
+    import ultralytics
+    src_img = Path(ultralytics.__file__).parent / "assets" / "bus.jpg"
 out = Path("assets/sample.mp4")
 out.parent.mkdir(parents=True, exist_ok=True)
 
@@ -47,8 +52,12 @@ print(f"wrote {out.resolve()} exists={out.exists()} size={out.stat().st_size}")
 # also try download a real pedestrian sample if network allows
 try:
     import urllib.request
-    # alternative: create a second sample from zidane
-    zidane = Path("/opt/miniconda3/envs/yolo-portfolio/lib/python3.11/site-packages/ultralytics/assets/zidane.jpg")
+    try:
+        from ultralytics.utils import ASSETS as UA2
+        zidane = Path(UA2) / "zidane.jpg"
+    except Exception:
+        import ultralytics
+        zidane = Path(ultralytics.__file__).parent / "assets" / "zidane.jpg"
     if zidane.exists():
         print(f"zidane exists {zidane}")
 except Exception as e:

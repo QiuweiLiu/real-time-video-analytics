@@ -30,8 +30,8 @@ No Kafka, no Redis, no Kubernetes — just **correct, testable, shippable CV eng
 ## Quick start
 
 ```bash
-conda create -n yolo-portfolio python=3.11 -y
-conda activate yolo-portfolio
+conda create -n video-analytics python=3.11 -y
+conda activate video-analytics
 pip install -r requirements.txt  # opencv, ultralytics, torch, fastapi, uvicorn
 ```
 
@@ -39,11 +39,11 @@ First run auto-downloads `yolov8n.pt` (~6 MB).
 
 ```bash
 # 1) CLI — sample video (80f, 4 dwell events)
-conda run -n yolo-portfolio python main.py --config config/config.yaml
+conda run -n video-analytics python main.py --config config/config.yaml
 # → outputs/result.mp4  +  outputs/events.jsonl  +  outputs/snapshots/*.jpg
 
 # 2) API + Dashboard
-conda run -n yolo-portfolio uvicorn api.app:app --host 127.0.0.1 --port 8000 --reload
+conda run -n video-analytics uvicorn api.app:app --host 127.0.0.1 --port 8000 --reload
 # open http://127.0.0.1:8000/  — drag & drop mp4, watch the annotated video and event table
 
 # 3) curl
@@ -64,14 +64,14 @@ rtsp:
   reconnect_delay: 0.5
 ```
 
-`VideoSource` auto-detects `rtsp://`, `rtmp://`, `http(s)://` and numeric camera indices, applies `fps→25` fallback, `frame_count→-1`, and reconnects with exponential backoff. *Not production-hardened (no jitter buffer, no auth refresh) — labeled `Basic RTSP`.*
+`VideoSource` auto-detects `rtsp://`, `rtmp://`, `http(s)://` and numeric camera indices, applies `fps→25` fallback, `frame_count→-1`, and reconnects with progressive backoff (`0.5s → 1.0s → 1.5s`). *Not production-hardened (no jitter buffer, no auth refresh) — labeled `Basic RTSP`.*
 
 ### Toggles
 
 ```bash
-conda run -n yolo-portfolio python main.py --no-line          # disable line
-conda run -n yolo-portfolio python main.py --no-roi           # disable ROI
-conda run -n yolo-portfolio python main.py --no-events        # disable JSON + snapshots
+conda run -n video-analytics python main.py --no-line          # disable line
+conda run -n video-analytics python main.py --no-roi           # disable ROI
+conda run -n video-analytics python main.py --no-events        # disable JSON + snapshots
 ```
 
 ### Configuration
@@ -116,6 +116,8 @@ Track(track_id, class_id, class_name, confidence, bbox=(x1,y1,x2,y2), center=(cx
 
 I stepped through the segment at 1 fps (sheet below, yellow = counting line) and counted every center crossing independently of the detector.
 
+![Validation sheet — 1 fps over 25 s, yellow = counting line](docs/validation_sheet.jpg)
+
 | Direction | Ground truth (human) | Prediction | Δ |
 |---|---:|---:|---:|
 | **A → B** (left → right) | **2** | **1** | **−1 miss** |
@@ -131,7 +133,7 @@ The segment contains two workers entering/exiting the central aisle. The missed 
 *Full run for the validation clip:*
 
 ```bash
-conda run -n yolo-portfolio python main.py --source /tmp/worker_validation_seg.mp4 --output outputs/validation_worker.mp4
+conda run -n video-analytics python main.py --source /tmp/worker_validation_seg.mp4 --output outputs/validation_worker.mp4
 # [cross] frame=42 id=4 B→A  frame=74 id=4 A→B  frame=159 id=12 B→A
 # roi: occ max 1, dwell 3 @56/172/217
 ```
@@ -141,7 +143,7 @@ conda run -n yolo-portfolio python main.py --source /tmp/worker_validation_seg.m
 ## Tests & security
 
 ```bash
-conda run -n yolo-portfolio python -m pytest tests/ -v   # 45 passed (10 line, 9 roi, 6 events, 2 track, 1 video, 8 video-security, 4 rtsp, 5 api)
+conda run -n video-analytics python -m pytest tests/ -v   # 46 passed (10 line, 9 roi, 6 events, 2 track, 1 video, 8 video-security, 5 rtsp, 5 api)
 ```
 
 **FastAPI `/video` hardening (M5 fix):**
@@ -150,7 +152,7 @@ conda run -n yolo-portfolio python -m pytest tests/ -v   # 45 passed (10 line, 9
 * Extension whitelist: `.mp4` `.avi` `.mov` `.mkv` only
 * Not found → `404`, outside → `403`, bad ext → `400`, never leaks `outputs/../` or `config/`
 
-**Basic RTSP reconnect:** stream read failures are retried `reconnect_attempts=3` with `0.5s·attempt` backoff. File sources are unaffected. Future production work would need jitter buffer, auth refresh, and frame-queue.
+**Basic RTSP reconnect:** stream read failures are retried `reconnect_attempts=3` with progressive backoff (`0.5s → 1.0s → 1.5s`). File sources are unaffected. Future production work would need jitter buffer, auth refresh, and frame-queue.
 
 ---
 

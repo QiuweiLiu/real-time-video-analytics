@@ -1,18 +1,17 @@
 # HANDOFF
 
-Goal: M3 ROI/Occupancy/Dwell
+Goal: M4 Event JSON + Snapshot
 Done:
-- Config roi polygon/dwell/classes 归一化
-- ROIAnalytics point_in_polygon + occupancy max/by_class + dwell 30f触发 + 去抖 (enter_frame连续)
-- Visualizer ROI半透明+occupancy/dwell文本+红框, Pipeline集成 line+roi 并行
-- Demo roi_demo 80f 滑入停留 (前16滑入 中40停留 后24滑出) 704KB
-- Tests 9 roi (内外/边/占用/阈值/重置/过滤/归一化/by_class) + 13 prior =22 passed
-- 验证: sample occ4 dwell4@30, roi_demo occ4 dwell4@30/33/38/42 line5, result 1.89MB, --no-* 回归
+- Config events enabled/json/snapshot_expand/max
+- EventLogger JSONL + save_snapshot clamp/expand/min10
+- Pipeline 集成 line/dwell → logger+snapshot (uuid, timestamp=frame/fps, snapshot路径), stats events_json/snapshots
+- Tests 6 events (logger读写, 正常/边界/小框/0expand, disabled)
+- 验证: sample 4 dwell 4截图 1.7KB json, line_demo 8事件 8图 3.3KB, --no-events 无文件回归, 22→28 tests
 Verified:
-- 端到端 80f一致, 可视化绿ROI+黄线, MPS 5-7fps, 22 tests
+- 端到端 80f, MPS 13-18fps, json字段完整, 截图可读 (14-75KB), 事件去重
 Rejected: —
 Open: 无
 Active: 待 commit/push
 Next:
 1. commit → push
-2. M4 JSON+截图 (事件持久化)
+2. M5 FastAPI/Dashboard/RTSP

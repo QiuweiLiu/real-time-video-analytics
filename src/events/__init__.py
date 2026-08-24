@@ -1,4 +1,6 @@
-"""events — placeholder for M4 (JSON records, snapshots).
+"""events — M4 JSON + snapshot."""
 
-M1: no logic required, keeps module structure per spec.
-"""
+from .logger import EventLogger
+from .snapshot import save_snapshot
+
+__all__ = ["EventLogger", "save_snapshot"]

@@ -41,3 +41,9 @@
 - Decision: line/roi 均支持 0-1 归一化, 检测到全点 0-1 时按 frame W/H 转换, 绝对坐标保持原值
 - Reason: 中央 ROI [[0.25,0.25]..] 在 640x480 正确映射 160-480, 便于 Portfolio 演示跨分辨率
 - Evidence: config.py _parse, line_crossing/ROIAnalytics set_frame_size, test_normalized
+
+## 2026-08-24 — M4 截图命名与 expand
+- Context: 多事件同帧同ID需避免覆盖, bbox贴边需clamp
+- Decision: event_id = f"{type}_{track}_{frame}_{uuid4[:4]}", snapshot按 bbox*expand(0.2) clamp至帧内, min10px, snapshot_max 100
+- Reason: uuid保证唯一, expand保留上下文, clamp防空图, 统一 logger JSONL便于追加与流式读取
+- Evidence: events/logger.py, snapshot.py save_snapshot, tests/test_events.py 6 passed, sample 4截图 line_demo 8截图

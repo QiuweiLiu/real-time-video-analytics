@@ -1,4 +1,4 @@
-# Real-Time Video Analytics — M3 Config
+# Real-Time Video Analytics — M4 Config
 model: yolov8n.pt
 source: assets/sample.mp4
 output: outputs/result.mp4
@@ -26,3 +26,11 @@ roi:
   polygon: [[0.25, 0.25], [0.75, 0.25], [0.75, 0.75], [0.25, 0.75]]  # 归一化中央矩形 → 160,120-480,360
   dwell_sec: 1.5  # 停留阈值秒, 超过触发 dwell 事件
   classes: null  # null=全部
+
+# M4 Event JSON + Snapshot
+events:
+  enabled: true
+  json_path: outputs/events.jsonl
+  snapshot_dir: outputs/snapshots
+  snapshot_expand: 0.2  # bbox 外扩 20%
+  snapshot_max: 100

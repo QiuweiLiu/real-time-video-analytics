@@ -14,7 +14,7 @@ from src.pipeline import VideoPipeline
 
 
 def parse_args():
-    p = argparse.ArgumentParser(description="Real-Time Video Analytics — M1/M2/M3")
+    p = argparse.ArgumentParser(description="Real-Time Video Analytics — M1/M2/M3/M4")
     p.add_argument("--config", type=str, default="config/config.yaml", help="path to config yaml")
     p.add_argument("--source", type=str, default=None, help="override video source path")
     p.add_argument("--output", type=str, default=None, help="override output path")
@@ -22,6 +22,7 @@ def parse_args():
     p.add_argument("--conf", type=float, default=None, help="override confidence threshold")
     p.add_argument("--no-line", action="store_true", help="disable line crossing for this run")
     p.add_argument("--no-roi", action="store_true", help="disable ROI for this run")
+    p.add_argument("--no-events", action="store_true", help="disable JSON/snapshot events")
     return p.parse_args()
 
 
@@ -52,6 +53,12 @@ def main():
         rc = ROIConfig(enabled=False, polygon=((160,120),(480,120),(480,360),(160,360)), dwell_sec=1.5, classes=None)
         cfg = replace(cfg, roi=rc)
         print("[override] ROI disabled via --no-roi")
+    if args.no_events:
+        from dataclasses import replace
+        from src.utils.config import EventsConfig
+        ec = EventsConfig(enabled=False, json_path="outputs/events.jsonl", snapshot_dir="outputs/snapshots", snapshot_expand=0.2, snapshot_max=100)
+        cfg = replace(cfg, events=ec)
+        print("[override] events disabled via --no-events")
 
     if overrides:
         # validate overrides before applying (P2-05)
@@ -86,6 +93,10 @@ def main():
         print(f"\n[roi] occ_current={rc.get('occupancy_current')} max={rc.get('max_occupancy')} dwell_total={rc.get('total_dwell')} by_class={rc.get('by_class')}")
         if rc.get("total_dwell",0)>0:
             print(f"[roi] dwell events: {rc.get('events')[:2]} ...")
+    if stats.get("events_enabled"):
+        print(f"\n[events] json={stats.get('events_json')} count={stats.get('events_count')} snapshots={stats.get('snapshots_count')}")
+        if stats.get("snapshots"):
+            print(f"[events] snapshots: {stats.get('snapshots')[:3]} ...")
 
     if not Path(stats["output"]).exists() or stats["output_bytes"] == 0:
         print("[error] output video missing or empty!", file=sys.stderr)

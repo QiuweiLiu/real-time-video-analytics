@@ -1,45 +1,35 @@
-# PLAN — Milestone 3: ROI / Occupancy / Dwell
+# PLAN — Milestone 4: Event JSON + 自动截图
 
 ## Goal
-在 M1/M2 基础上增加 ROI 区域感知：多边形 ROI 内外判定，实时 Occupancy 人数统计，Dwell 停留时长检测与事件触发，可视化叠加，配置驱动，不破坏既有管线。
+为已有的越线/ROI/dwell 事件增加持久化：每事件写入 JSON 记录（含帧号/时间戳/track/类型/位置）并自动保存事件发生时的目标截图 (bbox crop)，配置驱动，可选开关。
 
 ## Boundary
-- Inputs: config.yaml 新增 `roi` 段 (polygon + dwell_sec), 复用已有视频 (sample/line_demo) + 可选 roi_demo 滑移停留视频
-- Allowed: 修改 config, 新建 analytics/roi.py, 扩展 pipeline/visualizer, 新增测试与 demo 生成脚本, 更新 README
-- Forbidden: 改 Track 结构, 引入 FastAPI/RTSP, 二套状态, 改动 M2 line 逻辑
+- Inputs: 已有 analytics 事件 (line_crossing, dwell), 原始帧 + Track bbox, config 新增 events 段
+- Allowed: 新建 src/events/logger.py + snapshot.py, 修改 config、pipeline、main, 更新 README, 新增测试
+- Forbidden: 改 Track/ROI/Line 核心逻辑, 引入 RTSP/FastAPI, 二套状态
 - Success:
-  - `main.py` 同时支持 line+roi (可单独开关) 输出 `outputs/roi_result.mp4` 带 ROI 多边形+占用数
-  - 单元: 点在多边形 5用例, 占用计数 per-frame, 停留 2sec 触发 (20fps → 40帧), 去抖 (进出只计一次), 归一化 0-1 转换
-  - 集成: sample (中心矩形) 占用 2-3, dwell 在 4sec 视频内触发 ≥1 (阈值 1.5s); line_demo 占用 1-3, dwell 阈值 1.0s 时触发
-  - 可视化: ROI 半透明填充+边框+ `Occupancy: N / Dwell: M` 叠加, dwell 超阈值红框警告
-  - 回归: 关闭 roi 时 M1/M2 行为一致, 13→18 tests 均通过
-- Escalation: 若 YOLO 中心点判定导致边缘抖动误触发 dwell → 增加进入/离开滞回或时间阈值调参
-- Compute: <20s 80f, 无配额
+  - 运行 `main.py` 后生成 `outputs/events.jsonl` (每行一 event, 含 event_id/type/timestamp/frame/track/class/center/bbox, line/dwell 特有字段) 且 `outputs/snapshots/*.jpg` (事件裁剪)
+  - sample 80f → json 4 dwell + 0 line 计数, snapshots 4 张; line_demo 4 line + 0 dwell? (roi disabled) 或 roi_demo 4+3 混合; 截图文件对应 event_id
+  - 关闭 events.enabled 时无文件且 M3 行为一致 (回归)
+  - 单元: logger 写入/读取, snapshot 边界裁剪 (超框, 小框), 去重命名
+  - 总 tests 22→26 passed
+- Escalation: 若 bbox 裁剪超帧边界导致空图 → clamp 并保证 1x1 最小
+- Compute: <25s 80f, 截图 4-8 张 <2MB
 
 ## Tasks
-1. **Config 设计** (20min) — ✅ done
-   - roi polygon + dwell_sec + classes, 归一化
-
-2. **Analytics 核心** (60min) — ✅ done
-   - point_in_polygon, ROIAnalytics, DwellEvent, 30f阈值, 去抖
-
-3. **Pipeline & Visualizer 集成** (40min) — ✅ done
-   - draw_roi + highlight, pipeline 双 analytics, stats
-
-4. **Demo 视频与测试** (40min) — ✅ done
-   - roi_demo 滑入停留, 9 tests, 22 total
-
-5. **Verification** (30min) — ✅ done
-   - sample occ4 dwell4, roi_demo occ4 dwell4, 归一化, --no-* 回归, MPS 7fps
+1. **Config 设计** (15min) — ✅ done
+2. **Events 核心** (60min) — ✅ done (logger JSONL + snapshot clamp/expand)
+3. **Pipeline 集成** (40min) — ✅ done (uuid, timestamp, snapshot并行)
+4. **Tests & Demo** (30min) — ✅ done (6 tests, 28 total)
+5. **Verification** (30min) — ✅ done (sample 4 dwell/4snap, line_demo 8/8, --no-events 回归)
 
 ## Verification Plan
-- 最小先测: synthetic polygon → synthetic Track 序列 → 真实 YOLO roi_demo → full pipeline
-- 证据: 输出视频帧数/大小, 日志 occupancy/dwell, 截图, pytest 22
-- Gate: not_required
+- 最小先: 合成 logger + 假 frame snapshot → 真实视频 pipeline
+- 证据: jsonl行数/首行内容, snapshot 数量/大小/可读, 截图与 bbox 对应, pytest 28, 日志 EventLogger
 
 ## Deliverable Checklist
 - [x] 修改文件清单
 - [x] 运行命令
 - [x] 测试结果
-- [x] 输出视频
-- [x] 下一步 M4
+- [x] 输出视频+JSON+截图路径
+- [x] 下一步 M5

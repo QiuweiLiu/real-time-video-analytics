@@ -10,16 +10,25 @@ class LineCrossingConfig:
     enabled: bool
     p1: tuple[float, float]
     p2: tuple[float, float]
-    mode: str  # both | a_to_b | b_to_a
+    mode: str
     classes: list[int] | None
 
 
 @dataclass(frozen=True)
 class ROIConfig:
     enabled: bool
-    polygon: tuple[tuple[float, float], ...]  # absolute after parse, normalized allowed
+    polygon: tuple[tuple[float, float], ...]
     dwell_sec: float
     classes: list[int] | None
+
+
+@dataclass(frozen=True)
+class EventsConfig:
+    enabled: bool
+    json_path: str
+    snapshot_dir: str
+    snapshot_expand: float
+    snapshot_max: int
 
 
 @dataclass(frozen=True)
@@ -36,6 +45,7 @@ class PipelineConfig:
     fourcc: str
     line_crossing: LineCrossingConfig
     roi: ROIConfig
+    events: EventsConfig
 
 
 def _parse_line_crossing(raw: dict) -> LineCrossingConfig:
@@ -74,7 +84,6 @@ def _parse_roi(raw: dict) -> ROIConfig:
         return ROIConfig(enabled=False, polygon=((160,120),(480,120),(480,360),(160,360)), dwell_sec=1.5, classes=None)
     enabled = bool(rc.get("enabled", True))
     polygon = rc.get("polygon", [[0.25,0.25],[0.75,0.25],[0.75,0.75],[0.25,0.75]])
-    # validate polygon: list of [x,y]
     if not isinstance(polygon, (list, tuple)) or len(polygon) < 3:
         raise ValueError(f"roi.polygon must be list of >=3 points, got {polygon}")
     pts = []
@@ -90,6 +99,24 @@ def _parse_roi(raw: dict) -> ROIConfig:
     if classes is not None:
         classes = [int(c) for c in classes]
     return ROIConfig(enabled=enabled, polygon=polygon_t, dwell_sec=dwell_sec, classes=classes)
+
+
+def _parse_events(raw: dict) -> EventsConfig:
+    ec = raw.get("events", None)
+    if ec is None:
+        return EventsConfig(enabled=True, json_path="outputs/events.jsonl", snapshot_dir="outputs/snapshots", snapshot_expand=0.2, snapshot_max=100)
+    if isinstance(ec, dict) and not ec:
+        return EventsConfig(enabled=False, json_path="outputs/events.jsonl", snapshot_dir="outputs/snapshots", snapshot_expand=0.2, snapshot_max=100)
+    enabled = bool(ec.get("enabled", True))
+    json_path = str(ec.get("json_path", ec.get("json", "outputs/events.jsonl")))
+    snapshot_dir = str(ec.get("snapshot_dir", "outputs/snapshots"))
+    snapshot_expand = float(ec.get("snapshot_expand", 0.2))
+    if not 0 <= snapshot_expand <= 1:
+        raise ValueError(f"events.snapshot_expand must be 0-1, got {snapshot_expand}")
+    snapshot_max = int(ec.get("snapshot_max", 100))
+    if snapshot_max < 0:
+        raise ValueError(f"snapshot_max must be >=0, got {snapshot_max}")
+    return EventsConfig(enabled=enabled, json_path=json_path, snapshot_dir=snapshot_dir, snapshot_expand=snapshot_expand, snapshot_max=snapshot_max)
 
 
 def load_config(path: str | Path) -> PipelineConfig:
@@ -120,6 +147,7 @@ def load_config(path: str | Path) -> PipelineConfig:
 
     line_crossing = _parse_line_crossing(raw)
     roi = _parse_roi(raw)
+    events = _parse_events(raw)
 
     return PipelineConfig(
         model=str(model),
@@ -134,4 +162,5 @@ def load_config(path: str | Path) -> PipelineConfig:
         fourcc=str(fourcc),
         line_crossing=line_crossing,
         roi=roi,
+        events=events,
     )

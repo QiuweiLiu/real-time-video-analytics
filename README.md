@@ -1,5 +1,7 @@
 # Real-Time Video Analytics
 
+[![Core tests](https://github.com/QiuweiLiu/real-time-video-analytics/actions/workflows/tests.yml/badge.svg)](https://github.com/QiuweiLiu/real-time-video-analytics/actions/workflows/tests.yml)
+
 ![Python](https://img.shields.io/badge/Python-3.11-3776AB) ![YOLO](https://img.shields.io/badge/YOLO-v8n-00D9FF) ![ByteTrack](https://img.shields.io/badge/Tracking-ByteTrack-FF6B35) ![FastAPI](https://img.shields.io/badge/FastAPI-0.110-009688) ![License](https://img.shields.io/badge/License-MIT-green)
 
 > **Turn any fixed camera into a counting and monitoring sensor** — detect, track, and analyze multi-object motion in real time, with line-crossing counts, zone occupancy, dwell alerts, and instant event snapshots. Built for edge deployment on Apple Silicon / CUDA / CPU.
@@ -141,6 +143,8 @@ conda run -n video-analytics python main.py --source /tmp/worker_validation_seg.
 ---
 
 ## Tests & security
+
+GitHub Actions runs the model-independent analytics, event, video-input and RTSP tests on CPU. The full 46-test suite below also covers model tracking, API processing and video-serving security; those integration tests are outside the CI badge's scope.
 
 ```bash
 conda run -n video-analytics python -m pytest tests/ -v   # 46 passed (10 line, 9 roi, 6 events, 2 track, 1 video, 8 video-security, 5 rtsp, 5 api)
